@@ -8,6 +8,7 @@ package compilador2014.lexico;
 
 import java.io.*;
 import compilador2014.lexico.Automata;
+import compilador2014.lexico.Token;
 /**
  *
  * @author william
@@ -18,11 +19,17 @@ public class Lexico {
    private String[] lexBuffer;
    private int contadorBuffer;
    private final int maxchar = 1000;
+   private Token[] tokens;
+   private int cantTokens;
+   private int contTokens;
    
    public Lexico(String nmbArchivo){
        nombreArchivo = nmbArchivo;
        lexBuffer = new String[500];
+       tokens = new Token[500];
        contadorBuffer = 0;
+       cantTokens = 0;
+       contTokens = 0;
        try{
        archivo = new FileReader(nombreArchivo);
        }catch(FileNotFoundException e){
@@ -30,8 +37,22 @@ public class Lexico {
        }
    }
    
-   public Lexico(){
-       
+   private void nuevoToken(Token nt){
+       tokens[cantTokens++] = nt;
+   }
+   
+   public Token consumirToken(){
+       if(contTokens < cantTokens)
+         return tokens[contTokens++];
+       else return null;
+   }
+   
+   public void retroceso(){
+       if(contTokens > 0) contTokens--;
+   }
+   
+   public void establecerLinea(int linea){
+       tokens[cantTokens-1].setLinea(linea);
    }
    
    public void generarTokens(){
@@ -57,7 +78,7 @@ public class Lexico {
                        nbuf[i-1]=' ';
                    }
                    if(comentarioAbierto==1){
-                       nbuf[i]=' ';
+                       if(nbuf[i]!='\n')nbuf[i]=' ';
                        //System.out.println("Ignora: " + cbuf[i]);
                        if((cbuf[i-2]=='*') && (cbuf[i-1]=='/')){
                            comentarioAbierto = 0;
@@ -70,26 +91,118 @@ public class Lexico {
            }
            int espacio = 0;
            int delimitador = 0;
+           int const_char = 0;
+           int linea = 1;
            Automata reconocedor = new Automata();
            for(int i = 0; i < caracteresLeidos; i++){
-               if(nbuf[i]==' ' || nbuf[i]=='\n' || nbuf[i]=='\0' || nbuf[i]=='\r' || nbuf[i]=='\t'){
-                   if(reconocedor.elementosLeidos()>0){
-                       reconocedor.reconocer();
-                       reconocedor = new Automata();
-                   }
-               }else if(nbuf[i]=='(' || nbuf[i]==')' || nbuf[i]=='{' || nbuf[i]=='}' || nbuf[i]=='[' || nbuf[i]==']'){
-                   if(reconocedor.elementosLeidos()>0){
-                       reconocedor.reconocer();
-                   }
-                   reconocedor = new Automata();
-                   reconocedor.agregar(nbuf[i]);
-                   reconocedor.reconocer();
-                   reconocedor = new Automata();
-               }
-               else{ 
-                  reconocedor.agregar(nbuf[i]);
-               }
-               
+               if(const_char == 0){
+                    if(nbuf[i]==' ' || nbuf[i]=='\n' || nbuf[i]=='\0' || nbuf[i]=='\r' || nbuf[i]=='\t'){
+                        if(nbuf[i]=='\n') linea ++;
+                        if(reconocedor.elementosLeidos()>0){
+                            nuevoToken(reconocedor.reconocer());
+                            establecerLinea(linea);
+                            reconocedor = new Automata();
+                        }
+                    }else if(nbuf[i]=='(' || nbuf[i]==')' || nbuf[i]=='{' || nbuf[i]=='}' || nbuf[i]=='[' || nbuf[i]==']'){
+                        if(reconocedor.elementosLeidos()>0){
+                            nuevoToken(reconocedor.reconocer());
+                            establecerLinea(linea);
+                        }
+                        reconocedor = new Automata();
+                        reconocedor.agregar(nbuf[i]);
+                        nuevoToken(reconocedor.reconocer());
+                        establecerLinea(linea);
+                        reconocedor = new Automata();
+                    }else if(nbuf[i]=='+' || nbuf[i]=='-' || nbuf[i]=='*' || nbuf[i]=='/'){
+                        if(reconocedor.elementosLeidos()>0){
+                            nuevoToken(reconocedor.reconocer());
+                            establecerLinea(linea);
+                        }
+                        reconocedor = new Automata();
+                        reconocedor.agregar(nbuf[i]);
+                        nuevoToken(reconocedor.reconocer());
+                        establecerLinea(linea);
+                        reconocedor = new Automata();
+                    }else if(nbuf[i]=='=' || nbuf[i]=='>' || nbuf[i]=='<'){
+                        if(reconocedor.elementosLeidos()>0){
+                            nuevoToken(reconocedor.reconocer());
+                            establecerLinea(linea);
+                        }
+                        reconocedor = new Automata();
+                        reconocedor.agregar(nbuf[i]);
+                        if( ((i+1)<caracteresLeidos) && (nbuf[i+1]=='=') ){
+                            reconocedor.agregar(nbuf[i+1]);
+                            i++;
+                        }
+                        nuevoToken(reconocedor.reconocer());
+                        establecerLinea(linea);
+                        reconocedor = new Automata();
+                    }else if(nbuf[i]==','){
+                        if(reconocedor.elementosLeidos()>0){
+                            nuevoToken(reconocedor.reconocer());
+                            establecerLinea(linea);
+                        }
+                        reconocedor = new Automata();
+                        reconocedor.agregar(nbuf[i]);
+                        nuevoToken(reconocedor.reconocer());
+                        establecerLinea(linea);
+                        reconocedor = new Automata();
+                    }else if(nbuf[i]=='!'){
+                        if(reconocedor.elementosLeidos()>0){
+                            nuevoToken(reconocedor.reconocer());
+                            establecerLinea(linea);
+                        }
+                        reconocedor = new Automata();
+                        reconocedor.agregar(nbuf[i]);
+                        if( ((i+1)<caracteresLeidos) && (nbuf[i+1]=='=') ){
+                            reconocedor.agregar(nbuf[i+1]);
+                            i++;
+                        }
+                        nuevoToken(reconocedor.reconocer());
+                        establecerLinea(linea);
+                        reconocedor = new Automata();
+                    }else if(nbuf[i]==';'){
+                        if(reconocedor.elementosLeidos()>0){
+                            nuevoToken(reconocedor.reconocer());
+                            establecerLinea(linea);
+                        }
+                        reconocedor = new Automata();
+                        reconocedor.agregar(nbuf[i]);
+                        nuevoToken(reconocedor.reconocer());
+                        establecerLinea(linea);
+                        reconocedor = new Automata();
+                    }else if((nbuf[i]=='"')){
+                        const_char = 1;
+                        if(reconocedor.elementosLeidos()>0){
+                            nuevoToken(reconocedor.reconocer());
+                            establecerLinea(linea);
+                        }
+                        
+                        reconocedor = new Automata();
+                        reconocedor.agregar(nbuf[i]);
+                    }                
+                    else{ 
+                       reconocedor.agregar(nbuf[i]);
+                    }
+               }else{
+                    if(nbuf[i]=='"'){
+                        if(i>=1){
+                            if(nbuf[i-1]!='\\'){
+                                const_char = 0;
+                                reconocedor.agregar(nbuf[i]);
+                                nuevoToken(reconocedor.reconocer());
+                                establecerLinea(linea);
+                                reconocedor = new Automata();
+                            }
+                        }
+                    }else{
+                        reconocedor.agregar(nbuf[i]);
+                    }
+               }        
+           }
+           if(reconocedor.elementosLeidos()>0){
+                nuevoToken(reconocedor.reconocer());
+                establecerLinea(linea);
            }
        }catch(IOException e){
            throw new RuntimeException("No se puede leer el archivo");
