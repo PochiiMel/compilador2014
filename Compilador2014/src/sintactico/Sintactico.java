@@ -90,9 +90,15 @@ public class Sintactico {
     }
     
     private void compound_stmt(){
-        //System.out.println("CMP_STMT");
-        local_declarations();
-        statement_list();
+         
+         tokenActual = analizadorLexico.consumirToken();
+         if(tokenActual.obtenerLexema().equals("int") || tokenActual.obtenerLexema().equals("char") || tokenActual.obtenerLexema().equals("void")){
+             analizadorLexico.retroceso();
+             local_declarations();
+         }
+         
+         statement_list();
+         
     }
     
     private void local_declarations(){
@@ -107,6 +113,7 @@ public class Sintactico {
     }
     
     private void var_declaration(){
+        
         type_specifier();
         identifier();
         tokenActual = analizadorLexico.consumirToken();
@@ -118,7 +125,134 @@ public class Sintactico {
     }
     
     private void statement_list(){
-        
+        tokenActual = analizadorLexico.consumirToken();
+        //System.out.println("STATEMENT_LIST: " +  tokenActual.obtenerLexema());
+        if(!tokenActual.obtenerLexema().equals("}")){
+            analizadorLexico.retroceso();
+            statement();
+            statement_list();
+        }else{
+            //System.out.println("SALTO DE STATEMENT_LIST POR: " +  tokenActual.obtenerLexema());
+            analizadorLexico.retroceso();
+        }
+    }
+    
+    private void statement(){
+        //System.out.println("STATEMENT: " +  tokenActual.obtenerLexema());
+        expresion_stmt();
+        //compound_stmt();
+    }
+    
+    private void expresion_stmt(){
+        tokenActual = analizadorLexico.consumirToken();
+        System.out.println("EXPRESION_STMT: " +  tokenActual.obtenerLexema());
+        if(tokenActual.obtenerLexema().equals(";")){
+            // pasa
+        }else{
+            analizadorLexico.retroceso();
+            expresion();
+        }
+    }
+    
+    private void expresion(){
+        tokenActual = analizadorLexico.consumirToken();
+        System.out.println("EXPRESION: " +  tokenActual.obtenerLexema());
+        if(tokenActual.obtenerToken().equals("identifier")){
+            tokenActual = analizadorLexico.consumirToken();
+            if(tokenActual.obtenerLexema().equals("[")){
+                expresion();
+                tokenActual = analizadorLexico.consumirToken();
+                if(!tokenActual.obtenerLexema().equals("]")){
+                    error(7, tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
+                }else{
+                    tokenActual = analizadorLexico.consumirToken();
+                    if(tokenActual.obtenerLexema().equals("=")){
+                        expresion();
+                    }else{
+                        error(14, tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
+                    }
+                }
+            }else if(tokenActual.obtenerLexema().equals("=")){
+                expresion();
+            }else{
+                error(14, tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
+            }
+        }else{
+            simple_expresion();
+        }
+    }
+    
+    private void simple_expresion(){
+        System.out.println("SIMPLE_EXPRESION: " +  tokenActual.obtenerLexema());
+        if(tokenActual.obtenerToken().equals("relative-operator")||tokenActual.obtenerToken().equals("equal-operator")){
+            tokenActual = analizadorLexico.consumirToken();
+            aditive_expresion();   
+        }else{
+            aditive_expresion();
+        }
+    }
+    
+    private void aditive_expresion(){
+         System.out.println("ADITIVE_EXPRESION: " +  tokenActual.obtenerLexema());
+         if(tokenActual.obtenerToken().equals("add-operator")){
+             tokenActual = analizadorLexico.consumirToken();
+             aditive_expresion();
+         }else{
+             term();
+         }
+    }
+    
+    private void term(){
+        System.out.println("TERM: " +  tokenActual.obtenerLexema());
+        if(!tokenActual.obtenerToken().equals("mul-operator")){
+           factor();
+        }else{
+              tokenActual = analizadorLexico.consumirToken();
+              term();
+        }
+    }
+    
+    private void factor(){
+        // (expresion)
+        //tokenActual = analizadorLexico.consumirToken();
+        System.out.println("FACTOR: " +  tokenActual.obtenerLexema());
+        if(tokenActual.obtenerLexema().equals("(")){
+            expresion();
+            if(!tokenActual.obtenerLexema().equals(")")){
+                error(8, tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
+            }
+        }else if(tokenActual.obtenerToken().equals("identifier")){
+            tokenActual = analizadorLexico.consumirToken();
+            if(tokenActual.obtenerLexema().equals("[")){
+                expresion();
+                tokenActual = analizadorLexico.consumirToken();
+                if(!tokenActual.obtenerLexema().equals("]")){
+                    error(7, tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
+                }
+            }else if(tokenActual.obtenerLexema().equals("(")){
+                args();
+                if(!tokenActual.obtenerLexema().equals(")")){
+                    error(8, tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
+                }
+            }else{
+                analizadorLexico.retroceso();
+            } 
+        }else if(tokenActual.obtenerToken().equals("constant")){
+            // pasa
+        }else if(tokenActual.obtenerLexema().equals(")")){
+            
+        }else{
+            error(15, tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
+        }
+    }
+    
+    private void args(){
+        arg_list();
+    }
+    
+    private void arg_list(){
+        arg_list();
+        expresion();
     }
     
     private void param_list(){
@@ -162,7 +296,7 @@ public class Sintactico {
         if(tokenActual.obtenerToken()=="constant"){
              // pasa
         }else{
-             error(6, tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
+            error(6, tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
         }
     }
     
@@ -216,6 +350,21 @@ public class Sintactico {
             case 10:
                 System.out.println("Error sintáctico linea["+linea+"]: se esperaba \"}\" cerca de \""+info+"\"");
                 break;
+            case 11:
+                System.out.println("Error sintáctico linea["+linea+"]: se esperaba \"(\" cerca de \""+info+"\"");
+                break;
+            case 12:
+                System.out.println("Error sintáctico linea["+linea+"]: se esperaba un operador (*,/) cerca de \""+info+"\"");
+                break;
+            case 13:
+                System.out.println("Error sintáctico linea["+linea+"]: se esperaba un operador (+,-) cerca de \""+info+"\"");
+                break;
+            case 14:
+                System.out.println("Error sintáctico linea["+linea+"]: se esperaba un \"=\" cerca de \""+info+"\"");
+                break; 
+            case 15:
+                System.out.println("Error sintáctico linea["+linea+"]: Falta un operando cerca de \""+info+"\"");
+                break;     
         }
        System.exit(errorcode);
     }
