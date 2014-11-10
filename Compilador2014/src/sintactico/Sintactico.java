@@ -10,25 +10,38 @@ import compilador2014.lexico.Lexico;
 import compilador2014.lexico.Token;
 import javax.swing.JTextArea;
 import java.util.*;
+import semantico.Semantico;
+import semantico.Simbolo;
 /**
  *
  * @author william
  */
 public class Sintactico {
     private Lexico analizadorLexico;
+    private Semantico analizadorSemantico;
     private Token tokenActual;
     private String nombreArchivo;
     private JTextArea salida;
     private boolean main;
     int errores;
+    int CURRENT_SCOPE;
+    final int GLOBAL_SCOPE = 0;
+    int COUNTER_SCOPE;
+    String[] dataSimb;
+    boolean simbPrep;
     
     public Sintactico(String nmbArchivo){
         nombreArchivo = nmbArchivo;
         analizadorLexico = new Lexico(nmbArchivo);
         analizadorLexico.generarTokens();
+        analizadorSemantico = new Semantico();
         salida = null;
         main = false;
         errores = 0;
+        CURRENT_SCOPE = 0;
+        COUNTER_SCOPE = 0;
+        dataSimb = new String[3];
+        simbPrep = false;
     }
     
     public void establecerSalidaErrores(JTextArea output){
@@ -141,8 +154,8 @@ public class Sintactico {
                 if(!tokenActual.obtenerLexema().equals("void")){    // si no es void deberia seguir una lista de parametros o bien el cierre del parentesis
                     if(!tokenActual.obtenerLexema().equals(")")){
                         analizadorLexico.retroceso();
-                        param();
-                        param_list();
+                        param("main");
+                        param_list("main");
                     }else{
                         analizadorLexico.retroceso();
                     }
@@ -151,11 +164,13 @@ public class Sintactico {
                 if(tokenActual.obtenerLexema().equals(")")){        // cierre de parentesis de la declaracion de la funcion
                     tokenActual = analizadorLexico.consumirToken();
                     if(tokenActual.obtenerLexema().equals("{")){    // se abren llaves
+                        COUNTER_SCOPE++;
+                        CURRENT_SCOPE = COUNTER_SCOPE;
                         compound_stmt();                            // se busca un conjunto de sentencias (cuerpo de funcion)
                         tokenActual = analizadorLexico.consumirToken();
                         if(tokenActual!=null){
                             if(tokenActual.obtenerLexema().equals("}")){  // fin de declaracion de funcion      
-                                // pasa     
+                                CURRENT_SCOPE = CURRENT_SCOPE - COUNTER_SCOPE;    
                             }else{
                                 error(10,tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
                             }
@@ -188,6 +203,13 @@ public class Sintactico {
             tokenActual  = analizadorLexico.consumirToken();    // consume el siguiente token para identificar la regla de produccion que sera aplicada a continuciacion
             switch(tokenActual.obtenerLexema()){
                 case ";":                                       // si el siguiente token es un punto y coma se llega al fin de la declaracion, retrocedemos un token para volver a comprobar si existen mas declaraciones
+                    dataSimb[2] = "";
+                    if(analizadorSemantico.tablaDeSimbolos.existeSimbolo(dataSimb[1], CURRENT_SCOPE)<0){
+                        Simbolo nuevaVariable = new Simbolo(dataSimb[0], dataSimb[1], dataSimb[0]);
+                        analizadorSemantico.tablaDeSimbolos.nuevoSimbolo(nuevaVariable, CURRENT_SCOPE);
+                    }else{
+                        error(17,dataSimb[1],tokenActual.obtenerLinea());
+                    }
                     analizadorLexico.retroceso();
                     declaration_list();
                     break;
@@ -195,14 +217,36 @@ public class Sintactico {
                     num();                                      // debemos validar que despues del corchete se encuente un numero
                     closebrace();                               // luego que se cierre el corchete abierto
                     semicolon();                                // y que posteriormente tengamos el cierre del punto y coma
+                    dataSimb[2] = "";
+                    if(analizadorSemantico.tablaDeSimbolos.existeSimbolo(dataSimb[1], CURRENT_SCOPE)<0){
+                        Simbolo nuevaVariable = new Simbolo(dataSimb[0], dataSimb[1], dataSimb[0]);
+                        analizadorSemantico.tablaDeSimbolos.nuevoSimbolo(nuevaVariable, CURRENT_SCOPE);
+                    }else{
+                        error(17,dataSimb[1],tokenActual.obtenerLinea());
+                    }
                     break;
                 case "(":                                               // si el siguiente token es la apertura de un parentesis nos encontramos con la declaracion de una funcion
+                    dataSimb[2] = "";
+                    if(analizadorSemantico.tablaDeSimbolos.existeSimbolo(dataSimb[1], GLOBAL_SCOPE)<0){
+                        Simbolo nuevaVariable = new Simbolo(dataSimb[0], dataSimb[1], dataSimb[0]);
+                        analizadorSemantico.tablaDeSimbolos.nuevoSimbolo(nuevaVariable, CURRENT_SCOPE);
+                    }else{
+                        error(20,dataSimb[1],tokenActual.obtenerLinea());
+                    }
                     tokenActual = analizadorLexico.consumirToken();     // el parametro siguiente podria ser void (vacio)
                     if(!tokenActual.obtenerLexema().equals("void")){    // si no es void deberia seguir una lista de parametros o bien el cierre del parentesis
                         if(!tokenActual.obtenerLexema().equals(")")){
                             analizadorLexico.retroceso();
-                            param();
-                            param_list();
+                            String funcdef = dataSimb[1];
+                            param(funcdef);
+                            dataSimb[2] = "";
+                            if(analizadorSemantico.tablaDeSimbolos.existeSimbolo(dataSimb[1], COUNTER_SCOPE + 1)<0){
+                                 Simbolo nuevaVariable = new Simbolo(dataSimb[0], dataSimb[1], dataSimb[0]);
+                                 analizadorSemantico.tablaDeSimbolos.nuevoSimbolo(nuevaVariable, COUNTER_SCOPE + 1);
+                             }else{
+                                  error(17,dataSimb[1],tokenActual.obtenerLinea());
+                             }
+                            param_list(funcdef);
                         }else{
                             analizadorLexico.retroceso();
                         }
@@ -211,11 +255,13 @@ public class Sintactico {
                     if(tokenActual.obtenerLexema().equals(")")){        // cierre de parentesis de la declaracion de la funcion
                         tokenActual = analizadorLexico.consumirToken();
                         if(tokenActual.obtenerLexema().equals("{")){    // se abren llaves
+                            COUNTER_SCOPE++;
+                            CURRENT_SCOPE = COUNTER_SCOPE;
                             compound_stmt();                            // se busca un conjunto de sentencias (cuerpo de funcion)
                             tokenActual = analizadorLexico.consumirToken();
                             if(tokenActual!=null){
                                 if(tokenActual.obtenerLexema().equals("}")){  // fin de declaracion de funcion      
-                                    // pasa     
+                                    CURRENT_SCOPE = CURRENT_SCOPE - COUNTER_SCOPE;    
                                 }else{
                                     error(10,tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
                                 }
@@ -250,6 +296,7 @@ public class Sintactico {
          }
          
          // lista de sentencias
+         analizadorLexico.retroceso();
          statement_list();
     }
     
@@ -282,7 +329,26 @@ public class Sintactico {
         identifier();       // se espera un identificador
         tokenActual = analizadorLexico.consumirToken();
         if(tokenActual.obtenerLexema().equals(";")){
+            dataSimb[2] = "";
+            if(analizadorSemantico.tablaDeSimbolos.existeSimbolo(dataSimb[1], CURRENT_SCOPE)<0){
+                Simbolo nuevaVariable = new Simbolo(dataSimb[0], dataSimb[1], dataSimb[0]);
+                analizadorSemantico.tablaDeSimbolos.nuevoSimbolo(nuevaVariable, CURRENT_SCOPE);
+            }else{
+                error(17,dataSimb[1],tokenActual.obtenerLinea());
+            }
             local_declarations();   // se buscan mas declaraciones
+        }else if(tokenActual.obtenerLexema().equals("[")){
+            num();                                      // debemos validar que despues del corchete se encuente un numero
+            closebrace();                               // luego que se cierre el corchete abierto
+            semicolon();
+            dataSimb[2] = "";
+            if(analizadorSemantico.tablaDeSimbolos.existeSimbolo(dataSimb[1], CURRENT_SCOPE)<0){
+                Simbolo nuevaVariable = new Simbolo(dataSimb[0], dataSimb[1], dataSimb[0]);
+                analizadorSemantico.tablaDeSimbolos.nuevoSimbolo(nuevaVariable, CURRENT_SCOPE);
+            }else{
+                error(17,dataSimb[1],tokenActual.obtenerLinea());
+            }
+            local_declarations();
         }else{
             // falta el ";" de final de la declaracion
             error(5,tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
@@ -400,6 +466,9 @@ public class Sintactico {
         tokenActual = analizadorLexico.consumirToken();
         //salidaErrores("EXPRESION: " +  tokenActual.obtenerLexema());
         if(tokenActual.obtenerToken().equals("identifier")){
+            if(analizadorSemantico.tablaDeSimbolos.existeSimbolo(tokenActual.obtenerLexema(), CURRENT_SCOPE)<0){
+                error(18,tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
+            }
             tokenActual = analizadorLexico.consumirToken();
             if(tokenActual.obtenerLexema().equals("[")){
                 tokenActual = analizadorLexico.consumirToken();
@@ -501,8 +570,12 @@ public class Sintactico {
             }
             
         }else if(tokenActual.obtenerToken().equals("identifier")){
+            String id = tokenActual.obtenerLexema();
             tokenActual = analizadorLexico.consumirToken();
             if(tokenActual.obtenerLexema().equals("[")){
+                if(analizadorSemantico.tablaDeSimbolos.existeSimbolo(id, CURRENT_SCOPE)<0){
+                    error(18,id,tokenActual.obtenerLinea());
+                }
                 tokenActual = analizadorLexico.consumirToken();
                 simple_expresion();
                 tokenActual = analizadorLexico.consumirToken();
@@ -510,11 +583,23 @@ public class Sintactico {
                     error(7, tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
                 }
             }else if(tokenActual.obtenerLexema().equals("(")){
-                args();
+                int cant_args = args();
+                if(analizadorSemantico.tablaDeSimbolos.existeSimbolo(id, GLOBAL_SCOPE)<0){
+                    error(19,id,tokenActual.obtenerLinea());
+                }else{
+                    int numParams = Integer.parseInt(analizadorSemantico.tablaDeSimbolos.obtenerSimbolo(id, GLOBAL_SCOPE).obtenerValor("numparams"));
+                    if(numParams!=cant_args){
+                        error(21,Integer.toString(numParams),tokenActual.obtenerLinea());
+                    }
+                    
+                }
                 if(!tokenActual.obtenerLexema().equals(")")){
                     error(8, tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
                 }
             }else{
+                if(analizadorSemantico.tablaDeSimbolos.existeSimbolo(id, CURRENT_SCOPE)<0){
+                    error(18,id,tokenActual.obtenerLinea());
+                }
                 analizadorLexico.retroceso();
             } 
         }else if(tokenActual.obtenerToken().equals("constant")){
@@ -526,45 +611,64 @@ public class Sintactico {
         }
     }
     
-    private void args(){
-        arg_list();
+    private int args(){
+        return arg_list();
     }
     
-    private void arg_list(){
+    private int arg_list(){
         tokenActual = analizadorLexico.consumirToken();
         if(!tokenActual.obtenerLexema().equals(")")){
             if(tokenActual.obtenerLexema().equals(",")){
                 tokenActual = analizadorLexico.consumirToken();
                 simple_expresion();
-                arg_list();
+                return 1 + arg_list();
             }else{
                 analizadorLexico.retroceso();
                 tokenActual = analizadorLexico.consumirToken();
                 simple_expresion();
-                arg_list();
+                return 1 + arg_list();
             }
         }
+        
+        return 0;
     }
     
-    private void param_list(){
+    private void param_list(String funcdef){
         tokenActual = analizadorLexico.consumirToken();
         if(tokenActual.obtenerLexema().equals(",")){
-            param();
-            param_list();
+            param(funcdef);
+            dataSimb[2] = "";
+            if(analizadorSemantico.tablaDeSimbolos.existeSimbolo(dataSimb[1], COUNTER_SCOPE + 1)<0){
+                 Simbolo nuevaVariable = new Simbolo(dataSimb[0], dataSimb[1], dataSimb[0]);
+                 analizadorSemantico.tablaDeSimbolos.nuevoSimbolo(nuevaVariable, COUNTER_SCOPE + 1);
+             }else{
+                  error(17,dataSimb[1],tokenActual.obtenerLinea());
+             }
+            param_list(funcdef);
         }else{
             analizadorLexico.retroceso();
         }
     }
     
-    private void param(){
+    private void param(String funcdef){
         type_specifier();
         identifier();
+        Simbolo simb;
+        if((simb = analizadorSemantico.tablaDeSimbolos.obtenerSimbolo(funcdef, 0))!= null){
+            if(!simb.existePropiedad("numparams")){
+                simb.nuevaPropiedad("numparams", "1");
+            }else{
+                int numparams = Integer.parseInt(simb.obtenerValor("numparams"));
+                numparams++;
+                simb.nuevaPropiedad("numparams", Integer.toString(numparams));
+            }
+        }
     }
     
     private void type_specifier(){
          tokenActual = analizadorLexico.consumirToken();
          if(tokenActual.obtenerLexema().equals("int") || tokenActual.obtenerLexema().equals("void") || tokenActual.obtenerLexema().equals("char")){
-             // pasa
+             dataSimb[0] = tokenActual.obtenerLexema();
          }else{
              error(3, tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
          }
@@ -573,7 +677,7 @@ public class Sintactico {
     private void identifier(){
         tokenActual = analizadorLexico.consumirToken();
         if(tokenActual.obtenerToken()=="identifier"){
-             // pasa
+             dataSimb[1] = tokenActual.obtenerLexema();
         }else{
              if(tokenActual.obtenerToken()=="lex-error")
                 error(1, tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
@@ -660,6 +764,21 @@ public class Sintactico {
             case 16:
                 salidaErrores("Error sintáctico linea["+linea+"]: Se esperaba main cerca de \""+info+"\"");
                 break;
+            case 17:
+                salidaErrores("Error semántico linea["+linea+"]: Declaracion multiple de la variable \""+info+"\", ya ha sido declarada en este ámbito");
+                break;
+            case 18:
+                salidaErrores("Error semántico linea["+linea+"]: La variable \""+info+"\" no ha sido declarada en este ámbito");
+                break;
+            case 19:
+                salidaErrores("Error semántico linea["+linea+"]: La funcion \""+info+"\" no ha sido declarada");
+                break;
+            case 20:
+                salidaErrores("Error semántico linea["+linea+"]: La funcion \""+info+"\" ya fue declarada");
+                break; 
+            case 21:
+                salidaErrores("Error semántico linea["+linea+"]: La funcion esperaba recibir \""+info+"\" parametros");
+                break;     
         }
        //System.exit(errorcode);
     }
