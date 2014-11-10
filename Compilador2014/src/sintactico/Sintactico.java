@@ -8,6 +8,8 @@ package sintactico;
 
 import compilador2014.lexico.Lexico;
 import compilador2014.lexico.Token;
+import javax.swing.JTextArea;
+import java.util.*;
 /**
  *
  * @author william
@@ -16,48 +18,127 @@ public class Sintactico {
     private Lexico analizadorLexico;
     private Token tokenActual;
     private String nombreArchivo;
+    private JTextArea salida;
+    private boolean main;
+    int errores;
     
     public Sintactico(String nmbArchivo){
         nombreArchivo = nmbArchivo;
         analizadorLexico = new Lexico(nmbArchivo);
         analizadorLexico.generarTokens();
+        salida = null;
+        main = false;
+        errores = 0;
     }
     
-    public void iniciarAnalisis(){
-        program();
+    public void establecerSalidaErrores(JTextArea output){
+        salida = output;
     }
     
-    private void program(){
-        System.out.println("**** Inicio del programa ****");
-        declaration();
-        declaration_list();
-    }
-    
-    private void declaration_list(){
-        tokenActual = analizadorLexico.consumirToken();
-        if(tokenActual.obtenerLexema().equals(";") || tokenActual.obtenerLexema().equals("}")){
-            declaration();
-            declaration_list();
+    public void salidaErrores(String texto){
+        if(salida==null){
+            salidaErrores(texto);
+        }else{
+            salida.append(texto+"\n");
         }
     }
     
-    private void declaration(){
-        type_specifier();
-        identifier();
-        tokenActual  = analizadorLexico.consumirToken();
-        switch(tokenActual.obtenerLexema()){
-            case ";":
+    public void limipiarSalidaErrores(){
+        if(salida!=null){
+            salida.setText("");
+        }
+    }
+    
+    /**
+     * inicia el analisis sintactico
+     */ 
+    public void iniciarAnalisis(){
+        // analisis del programa 
+        program(); 
+        if(!main){
+            errores++;
+            salidaErrores("No se encuentra ningun punto de entrada (main) en el programa");
+        }
+        salidaErrores("**** FIN DE COMPILACION Errores("+errores+")****");
+        if(errores==0){
+            salidaErrores("Compilacion exitosa!!!");
+        }else{
+            salidaErrores("Se encontraron algunos errores!!!");
+        }
+    }
+    
+    /**
+     * Un programa esta compuesto por una declaracion o una lista de declaraciones, La ultima declaracion del programa debe 
+     * ser la declaracion de una funcion de nombre main.
+     */
+    private void program(){
+        Calendar fecha = new GregorianCalendar();
+        //Obtenemos el valor del año, mes, día,
+        //hora, minuto y segundo del sistema
+        //usando el método get y el parámetro correspondiente
+        int año = fecha.get(Calendar.YEAR);
+        int mes = fecha.get(Calendar.MONTH);
+        int dia = fecha.get(Calendar.DAY_OF_MONTH);
+        int hora = fecha.get(Calendar.HOUR_OF_DAY);
+        int minuto = fecha.get(Calendar.MINUTE);
+        int segundo = fecha.get(Calendar.SECOND);
+        salidaErrores("DATE: "+ dia + "/" + (mes+1) + "/" + año+" "+hora+":"+minuto+":"+segundo);
+        salidaErrores("**** INICIO DE COMPILACION ****");
+        tokenActual = analizadorLexico.consumirToken();
+        if(tokenActual!=null){
+            if(tokenActual.obtenerLexema().equals("void") || tokenActual.obtenerLexema().equals("int") || tokenActual.obtenerLexema().equals("char")){
                 analizadorLexico.retroceso();
                 declaration_list();
-                break;
-            case "[":
-                num();
-                closebrace();
-                semicolon();
-                break;
-            case "(":
+            }
+        }
+    }
+    
+    /**
+     * Una lista de declaraciones esta compuesta de una declaracion mas otra lista de declaraciones que a su vez puede estar vacia
+     * contener una declaracion o bien una declaracion y otra lista de declaraciones. (definicion recursiva).
+     */
+    private void declaration_list(){
+        tokenActual = analizadorLexico.consumirToken();
+        if(tokenActual!=null){
+            if(tokenActual.obtenerLexema().equals("void") || tokenActual.obtenerLexema().equals("int") || tokenActual.obtenerLexema().equals("char")){
                 tokenActual = analizadorLexico.consumirToken();
-                if(!tokenActual.obtenerLexema().equals("void")){
+                if(tokenActual.obtenerToken().equals("identifier")){
+                    analizadorLexico.retroceso();
+                    analizadorLexico.retroceso();
+                    declaration();
+                    declaration_list();
+                }else if(tokenActual.obtenerLexema().equals("main")){
+                    analizadorLexico.retroceso();
+                    analizadorLexico.retroceso();
+                    main_declaration();
+                }
+            }else if(tokenActual.obtenerLexema().equals(";")){
+                declaration();
+                declaration_list();
+            }else if(tokenActual.obtenerLexema().equals("}")){
+                declaration();
+                declaration_list();
+            }else{
+                error(4, tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
+            }
+        }else{
+            analizadorLexico.retroceso();
+        }
+    }
+    
+    private void main_declaration(){
+        main = true;
+        type_specifier();                                   // pregunta por el especificador de tipo
+        tokenActual = analizadorLexico.consumirToken();
+        if(!tokenActual.obtenerLexema().equals("main")){
+            error(16,tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
+        }
+       
+        tokenActual  = analizadorLexico.consumirToken();    // consume el siguiente token para identificar la regla de produccion que sera aplicada a continuciacion
+        switch(tokenActual.obtenerLexema()){
+            case "(":                                               // si el siguiente token es la apertura de un parentesis nos encontramos con la declaracion de una funcion
+                tokenActual = analizadorLexico.consumirToken();     // el parametro siguiente podria ser void (vacio)
+                if(!tokenActual.obtenerLexema().equals("void")){    // si no es void deberia seguir una lista de parametros o bien el cierre del parentesis
                     if(!tokenActual.obtenerLexema().equals(")")){
                         analizadorLexico.retroceso();
                         param();
@@ -67,13 +148,17 @@ public class Sintactico {
                     }
                 }
                 tokenActual = analizadorLexico.consumirToken();
-                if(tokenActual.obtenerLexema().equals(")")){
+                if(tokenActual.obtenerLexema().equals(")")){        // cierre de parentesis de la declaracion de la funcion
                     tokenActual = analizadorLexico.consumirToken();
-                    if(tokenActual.obtenerLexema().equals("{")){
-                        compound_stmt();
+                    if(tokenActual.obtenerLexema().equals("{")){    // se abren llaves
+                        compound_stmt();                            // se busca un conjunto de sentencias (cuerpo de funcion)
                         tokenActual = analizadorLexico.consumirToken();
-                        if(tokenActual.obtenerLexema().equals("}")){
-                            // pasa
+                        if(tokenActual!=null){
+                            if(tokenActual.obtenerLexema().equals("}")){  // fin de declaracion de funcion      
+                                // pasa     
+                            }else{
+                                error(10,tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
+                            }
                         }else{
                             error(10,tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
                         }
@@ -81,99 +166,259 @@ public class Sintactico {
                         error(9,tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
                     }
                 }else{
-                    error(8,tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
+                    error(8,tokenActual.obtenerLexema(),tokenActual.obtenerLinea());    // falta el parentesis de cierre de la declaracion de la funcion
                 }
                 break;
             default:
-                error(5,tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
+                error(11,tokenActual.obtenerLexema(),tokenActual.obtenerLinea());        // no se encontro ni ";", "(" o "[" lanzamos un error preguntando por el ";" 
         }
     }
     
+    /**
+     * Una declaracion puede ser de dos tipos. La declaracion de una variable o la declaracion de una funcion. 
+     * La declaracion de una variable puede ser una variable o un arreglo. Para todos los casos se espera un especificador de tipo
+     * y un identificador y posteriormente se identifica el caso de declaracion. 
+     */
+    private void declaration(){
+        tokenActual = analizadorLexico.consumirToken();
+        if(tokenActual!=null){
+            analizadorLexico.retroceso();
+            type_specifier();                                   // pregunta por el especificador de tipo
+            identifier();                                       // pregunta por el identificador
+            tokenActual  = analizadorLexico.consumirToken();    // consume el siguiente token para identificar la regla de produccion que sera aplicada a continuciacion
+            switch(tokenActual.obtenerLexema()){
+                case ";":                                       // si el siguiente token es un punto y coma se llega al fin de la declaracion, retrocedemos un token para volver a comprobar si existen mas declaraciones
+                    analizadorLexico.retroceso();
+                    declaration_list();
+                    break;
+                case "[":                                       // si el siguiente token es la apertura de un corchete nos encontramos con la declaracion de un arreglo
+                    num();                                      // debemos validar que despues del corchete se encuente un numero
+                    closebrace();                               // luego que se cierre el corchete abierto
+                    semicolon();                                // y que posteriormente tengamos el cierre del punto y coma
+                    break;
+                case "(":                                               // si el siguiente token es la apertura de un parentesis nos encontramos con la declaracion de una funcion
+                    tokenActual = analizadorLexico.consumirToken();     // el parametro siguiente podria ser void (vacio)
+                    if(!tokenActual.obtenerLexema().equals("void")){    // si no es void deberia seguir una lista de parametros o bien el cierre del parentesis
+                        if(!tokenActual.obtenerLexema().equals(")")){
+                            analizadorLexico.retroceso();
+                            param();
+                            param_list();
+                        }else{
+                            analizadorLexico.retroceso();
+                        }
+                    }
+                    tokenActual = analizadorLexico.consumirToken();
+                    if(tokenActual.obtenerLexema().equals(")")){        // cierre de parentesis de la declaracion de la funcion
+                        tokenActual = analizadorLexico.consumirToken();
+                        if(tokenActual.obtenerLexema().equals("{")){    // se abren llaves
+                            compound_stmt();                            // se busca un conjunto de sentencias (cuerpo de funcion)
+                            tokenActual = analizadorLexico.consumirToken();
+                            if(tokenActual!=null){
+                                if(tokenActual.obtenerLexema().equals("}")){  // fin de declaracion de funcion      
+                                    // pasa     
+                                }else{
+                                    error(10,tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
+                                }
+                            }else{
+                                error(10,tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
+                            }
+                        }else{
+                            error(9,tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
+                        }
+                    }else{
+                        error(8,tokenActual.obtenerLexema(),tokenActual.obtenerLinea());    // falta el parentesis de cierre de la declaracion de la funcion
+                    }
+                    break;
+                default:
+                    error(5,tokenActual.obtenerLexema(),tokenActual.obtenerLinea());        // no se encontro ni ";", "(" o "[" lanzamos un error preguntando por el ";" 
+            }
+        }
+    }
+    
+    /**
+     * Conjunto de sentencias, puede contener declaraciones locales o una lista de sentencias
+     * Declaracion: Obligatoriamente inicia por un especificador de tipo
+     * Sentencias: Puede iniciar por ";" (linea vacia), un identificador de una variable o bien por una constante (caracter o entero)
+     */
     private void compound_stmt(){
-         
-         tokenActual = analizadorLexico.consumirToken();
+         tokenActual = analizadorLexico.consumirToken(); // consume el token para validar si se trada de una declaracion o de otro tipo de sentencia
+         //salidaErrores("Endrada compound: " + tokenActual.obtenerLexema());
          if(tokenActual.obtenerLexema().equals("int") || tokenActual.obtenerLexema().equals("char") || tokenActual.obtenerLexema().equals("void")){
+             // aca tenemos declaraciones
              analizadorLexico.retroceso();
              local_declarations();
          }
          
+         // lista de sentencias
          statement_list();
-         
     }
     
+    /**
+     * Una declaracion local consiste de una definicion recursiva, esta determinada por una declaracion de variable y otro conjunto de delcaraciones locales
+     */
     private void local_declarations(){
+        // volvemos a verificar si se trata de declaraciones
         tokenActual = analizadorLexico.consumirToken();
-        if(tokenActual.obtenerLexema().equals("int") || tokenActual.obtenerLexema().equals("char") || tokenActual.obtenerLexema().equals("void")){
-            analizadorLexico.retroceso();
-            var_declaration();
-            local_declarations();
+        if(tokenActual!=null){
+            if(tokenActual.obtenerLexema().equals("int") || tokenActual.obtenerLexema().equals("char") || tokenActual.obtenerLexema().equals("void")){
+                analizadorLexico.retroceso();
+                var_declaration();      // declaracion de una variable
+                local_declarations();   // busca mas declaraciones
+            }else{
+                analizadorLexico.retroceso(); // No era una declaracion, devolvemos la posicion del analizador a donde se encontraba anteriormente
+            }
         }else{
             analizadorLexico.retroceso();
         }
     }
     
+    /**
+     * Una declaracion de variable puede definirse por un identificador de tipo, un identificador y un punto y como
+     * DEBE SOPORTAR ARREGLOS PERO AUN NO SE HA IMPLEMENTADO, RECORDAR HACERLO DESPUES
+     */
     private void var_declaration(){
         
-        type_specifier();
-        identifier();
+        type_specifier();   // se espera un especificador de tipo
+        identifier();       // se espera un identificador
         tokenActual = analizadorLexico.consumirToken();
         if(tokenActual.obtenerLexema().equals(";")){
-            local_declarations();
+            local_declarations();   // se buscan mas declaraciones
         }else{
+            // falta el ";" de final de la declaracion
             error(5,tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
         }
     }
-    
+    /**
+     * Lista de sentencias. Una lista de sentencias sera posible encontrala cuando el siguiente token sea cualquier cosa menos
+     * un especificador de tipo o bien una llave de cierre
+     */
     private void statement_list(){
         tokenActual = analizadorLexico.consumirToken();
-        //System.out.println("STATEMENT_LIST: " +  tokenActual.obtenerLexema());
-        if(!tokenActual.obtenerLexema().equals("}")){
-            analizadorLexico.retroceso();
-            statement();
-            statement_list();
+        //salidaErrores("STATEMENT_LIST: " +  tokenActual.obtenerLexema());
+        if(tokenActual != null){
+            if((!tokenActual.obtenerLexema().equals("}"))){
+                analizadorLexico.retroceso(); // verificamos el token que proseguia y por lo tanto retrocedemos a la posicion anterior para analizar
+                statement();        // verificamos que era una sentencia, consumimos dicha sentencia 
+                statement_list();   // se ha consumido la sentencia encontrada y ahora buscamos mas sentencias
+            }else{
+                //salidaErrores("SALTO DE STATEMENT_LIST POR: " +  tokenActual.obtenerLexema());
+                analizadorLexico.retroceso(); // no era una sentencia, por lo tanto regresamos a la posicion anterior
+            }
         }else{
-            //System.out.println("SALTO DE STATEMENT_LIST POR: " +  tokenActual.obtenerLexema());
             analizadorLexico.retroceso();
         }
     }
     
+    /**
+     * Una sentencia puede ser una expresion, una sentencia compuesta (auto recursiva), un condicional, etc. Todo lo que no sea una declaracion de tipo
+     * un expresion_stmt puede ser un ";", una asignacion a una variable o una expresion matermatica. Cualquier cosa que no sea un bucle o un return
+     */
     private void statement(){
-        //System.out.println("STATEMENT: " +  tokenActual.obtenerLexema());
-        expresion_stmt();
-        //compound_stmt();
+        //salidaErrores("STATEMENT: " +  tokenActual.obtenerLexema());
+        // vamos a verificar el token que sigue
+        tokenActual = analizadorLexico.consumirToken();
+        if(tokenActual.obtenerToken().equals("identifier") || tokenActual.obtenerLexema().equals(";") || tokenActual.obtenerToken().equals("(") || tokenActual.obtenerToken().equals("constant")){
+            analizadorLexico.retroceso();
+            expresion_stmt();
+        }else if(tokenActual.obtenerLexema().equals("void") || tokenActual.obtenerLexema().equals("char") || tokenActual.obtenerLexema().equals("int")){
+            analizadorLexico.retroceso();
+            compound_stmt();
+        }else if(tokenActual.obtenerLexema().equals("if")){
+            analizadorLexico.retroceso();
+            selection_stmt();
+        }else if(tokenActual.obtenerLexema().equals("while")){
+            analizadorLexico.retroceso();
+            iteration_stmt();
+        }else if(tokenActual.obtenerLexema().equals("return")){
+            analizadorLexico.retroceso();
+            return_stmt();
+        }
+    }
+    
+    private void return_stmt(){
+        tokenActual = analizadorLexico.consumirToken();
+        if(tokenActual.obtenerLexema().equals("return")){
+            tokenActual = analizadorLexico.consumirToken();
+            if(tokenActual.obtenerLexema().equals(";")){
+                // pasa
+            }else{
+                simple_expresion();
+                tokenActual = analizadorLexico.consumirToken();
+                if(!tokenActual.obtenerLexema().equals(";")){
+                     error(5, tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
+                }
+            }
+        }
+    }
+    
+    private void selection_stmt(){
+        tokenActual = analizadorLexico.consumirToken();
+        if(tokenActual.obtenerLexema().equals("if")){
+            tokenActual = analizadorLexico.consumirToken();
+            if(tokenActual.obtenerLexema().equals("(")){
+                simple_expresion();
+                if(!tokenActual.obtenerLexema().equals(")")){
+                    error(8, tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
+                }
+            }else{
+                 error(11, tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
+            }
+        }
+    }
+
+    private void iteration_stmt(){
+        tokenActual = analizadorLexico.consumirToken();
+        if(tokenActual.obtenerLexema().equals("while")){
+            tokenActual = analizadorLexico.consumirToken();
+            if(tokenActual.obtenerLexema().equals("(")){
+                simple_expresion();
+                if(!tokenActual.obtenerLexema().equals(")")){
+                    error(8, tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
+                }
+            }else{
+                 error(11, tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
+            }
+        }
     }
     
     private void expresion_stmt(){
         tokenActual = analizadorLexico.consumirToken();
-        System.out.println("EXPRESION_STMT: " +  tokenActual.obtenerLexema());
+        //salidaErrores("EXPRESION_STMT: " +  tokenActual.obtenerLexema());
         if(tokenActual.obtenerLexema().equals(";")){
             // pasa
         }else{
             analizadorLexico.retroceso();
             expresion();
+            tokenActual = analizadorLexico.consumirToken();
+            if(!tokenActual.obtenerLexema().equals(";")){
+                error(5, tokenActual.obtenerLexema(),tokenActual.obtenerLinea()); 
+            }
         }
     }
     
     private void expresion(){
         tokenActual = analizadorLexico.consumirToken();
-        System.out.println("EXPRESION: " +  tokenActual.obtenerLexema());
+        //salidaErrores("EXPRESION: " +  tokenActual.obtenerLexema());
         if(tokenActual.obtenerToken().equals("identifier")){
             tokenActual = analizadorLexico.consumirToken();
             if(tokenActual.obtenerLexema().equals("[")){
-                expresion();
+                tokenActual = analizadorLexico.consumirToken();
+                simple_expresion();
                 tokenActual = analizadorLexico.consumirToken();
                 if(!tokenActual.obtenerLexema().equals("]")){
                     error(7, tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
                 }else{
                     tokenActual = analizadorLexico.consumirToken();
                     if(tokenActual.obtenerLexema().equals("=")){
-                        expresion();
+                        tokenActual = analizadorLexico.consumirToken();
+                        simple_expresion();
                     }else{
                         error(14, tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
                     }
                 }
             }else if(tokenActual.obtenerLexema().equals("=")){
-                expresion();
+                tokenActual = analizadorLexico.consumirToken();
+                simple_expresion();
             }else{
                 error(14, tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
             }
@@ -183,48 +428,83 @@ public class Sintactico {
     }
     
     private void simple_expresion(){
-        System.out.println("SIMPLE_EXPRESION: " +  tokenActual.obtenerLexema());
-        if(tokenActual.obtenerToken().equals("relative-operator")||tokenActual.obtenerToken().equals("equal-operator")){
-            tokenActual = analizadorLexico.consumirToken();
-            aditive_expresion();   
-        }else{
-            aditive_expresion();
-        }
-    }
-    
-    private void aditive_expresion(){
-         System.out.println("ADITIVE_EXPRESION: " +  tokenActual.obtenerLexema());
-         if(tokenActual.obtenerToken().equals("add-operator")){
+        //salidaErrores("SIMPLE_EXPRESION: " +  tokenActual.obtenerLexema());
+        //salidaErrores("ADITIVE_EXPRESION: " +  tokenActual.obtenerLexema());
+         tokenActual = analizadorLexico.consumirToken();
+         if(tokenActual.obtenerToken().equals("equal-operator")||tokenActual.obtenerToken().equals("relative-operator")){
+             analizadorLexico.retroceso();
+             analizadorLexico.retroceso();
+             tokenActual = analizadorLexico.consumirToken();
+             aditive_expresion();
+             tokenActual = analizadorLexico.consumirToken();
              tokenActual = analizadorLexico.consumirToken();
              aditive_expresion();
          }else{
+             analizadorLexico.retroceso();
+             analizadorLexico.retroceso();
+             tokenActual = analizadorLexico.consumirToken();
+             //salidaErrores("RE: " +  tokenActual.obtenerLexema());
+             aditive_expresion();
+         }
+    }
+    
+    private void aditive_expresion(){
+         //salidaErrores("ADITIVE_EXPRESION: " +  tokenActual.obtenerLexema());
+         tokenActual = analizadorLexico.consumirToken();
+         if(tokenActual.obtenerToken().equals("add-operator")){
+             analizadorLexico.retroceso();
+             analizadorLexico.retroceso();
+             tokenActual = analizadorLexico.consumirToken();
+             term();
+             tokenActual = analizadorLexico.consumirToken();
+             tokenActual = analizadorLexico.consumirToken();
+             aditive_expresion();
+         }else{
+             analizadorLexico.retroceso();
+             analizadorLexico.retroceso();
+             tokenActual = analizadorLexico.consumirToken();
+             //salidaErrores("RE: " +  tokenActual.obtenerLexema());
              term();
          }
     }
     
     private void term(){
-        System.out.println("TERM: " +  tokenActual.obtenerLexema());
-        if(!tokenActual.obtenerToken().equals("mul-operator")){
-           factor();
-        }else{
-              tokenActual = analizadorLexico.consumirToken();
-              term();
-        }
+        //salidaErrores("TERM: " +  tokenActual.obtenerLexema());
+        tokenActual = analizadorLexico.consumirToken();
+         if(tokenActual.obtenerToken().equals("mul-operator")){
+             analizadorLexico.retroceso();
+             analizadorLexico.retroceso();
+             tokenActual = analizadorLexico.consumirToken();
+             factor();
+             tokenActual = analizadorLexico.consumirToken();
+             tokenActual = analizadorLexico.consumirToken();
+             term();
+         }else{
+             analizadorLexico.retroceso();
+             analizadorLexico.retroceso();
+             tokenActual = analizadorLexico.consumirToken();
+             //salidaErrores("RE: " +  tokenActual.obtenerLexema());
+             factor();
+         }
     }
     
     private void factor(){
         // (expresion)
         //tokenActual = analizadorLexico.consumirToken();
-        System.out.println("FACTOR: " +  tokenActual.obtenerLexema());
+        //salidaErrores("FACTOR: " +  tokenActual.obtenerLexema());
         if(tokenActual.obtenerLexema().equals("(")){
-            expresion();
+            tokenActual = analizadorLexico.consumirToken();
+            simple_expresion();
+            tokenActual = analizadorLexico.consumirToken();
             if(!tokenActual.obtenerLexema().equals(")")){
                 error(8, tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
             }
+            
         }else if(tokenActual.obtenerToken().equals("identifier")){
             tokenActual = analizadorLexico.consumirToken();
             if(tokenActual.obtenerLexema().equals("[")){
-                expresion();
+                tokenActual = analizadorLexico.consumirToken();
+                simple_expresion();
                 tokenActual = analizadorLexico.consumirToken();
                 if(!tokenActual.obtenerLexema().equals("]")){
                     error(7, tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
@@ -251,8 +531,19 @@ public class Sintactico {
     }
     
     private void arg_list(){
-        arg_list();
-        expresion();
+        tokenActual = analizadorLexico.consumirToken();
+        if(!tokenActual.obtenerLexema().equals(")")){
+            if(tokenActual.obtenerLexema().equals(",")){
+                tokenActual = analizadorLexico.consumirToken();
+                simple_expresion();
+                arg_list();
+            }else{
+                analizadorLexico.retroceso();
+                tokenActual = analizadorLexico.consumirToken();
+                simple_expresion();
+                arg_list();
+            }
+        }
     }
     
     private void param_list(){
@@ -319,53 +610,57 @@ public class Sintactico {
     }
     
     private void error(int errorcode, String info, int linea){
+        errores++;
         switch(errorcode){
             case 1:
-                System.out.println("lexico linea["+linea+"]: no se reconoce la secuencia \""+info+"\"");
+                salidaErrores("lexico linea["+linea+"]: no se reconoce la secuencia \""+info+"\"");
                 break;
             case 2:
-                System.out.println("Error sintáctico linea["+linea+"]: se esperaba una declaracion cerca de \""+info+"\"");
+                salidaErrores("Error sintáctico linea["+linea+"]: se esperaba una declaracion cerca de \""+info+"\"");
                 break;
             case 3:
-                System.out.println("Error sintáctico linea["+linea+"]: se esperaba una especificacion de tipo cerca de \""+info+"\"");
+                salidaErrores("Error sintáctico linea["+linea+"]: se esperaba una especificacion de tipo cerca de \""+info+"\"");
                 break;
             case 4:
-                System.out.println("Error sintáctico linea["+linea+"]: se esperaba un identificador cerca de \""+info+"\""); 
+                salidaErrores("Error sintáctico linea["+linea+"]: se esperaba un identificador cerca de \""+info+"\""); 
                 break;
             case 5:
-                System.out.println("Error sintáctico linea["+linea+"]: se esperaba \";\" cerca de \""+info+"\"");
+                salidaErrores("Error sintáctico linea["+linea+"]: se esperaba \";\" cerca de \""+info+"\"");
                 break;
             case 6:
-                System.out.println("Error sintáctico linea["+linea+"]: se esperaba una constante cerca de \""+info+"\"");
+                salidaErrores("Error sintáctico linea["+linea+"]: se esperaba una constante cerca de \""+info+"\"");
                 break;
             case 7:
-                System.out.println("Error sintáctico linea["+linea+"]: se esperaba \"]\" cerca de \""+info+"\"");
+                salidaErrores("Error sintáctico linea["+linea+"]: se esperaba \"]\" cerca de \""+info+"\"");
                 break;
             case 8:
-                System.out.println("Error sintáctico linea["+linea+"]: se esperaba \")\" cerca de \""+info+"\"");
+                salidaErrores("Error sintáctico linea["+linea+"]: se esperaba \")\" cerca de \""+info+"\"");
                 break;
             case 9:
-                System.out.println("Error sintáctico linea["+linea+"]: se esperaba \"{\" cerca de \""+info+"\"");
+                salidaErrores("Error sintáctico linea["+linea+"]: se esperaba \"{\" cerca de \""+info+"\"");
                 break;
             case 10:
-                System.out.println("Error sintáctico linea["+linea+"]: se esperaba \"}\" cerca de \""+info+"\"");
+                salidaErrores("Error sintáctico linea["+linea+"]: se esperaba \"}\" cerca de \""+info+"\"");
                 break;
             case 11:
-                System.out.println("Error sintáctico linea["+linea+"]: se esperaba \"(\" cerca de \""+info+"\"");
+                salidaErrores("Error sintáctico linea["+linea+"]: se esperaba \"(\" cerca de \""+info+"\"");
                 break;
             case 12:
-                System.out.println("Error sintáctico linea["+linea+"]: se esperaba un operador (*,/) cerca de \""+info+"\"");
+                salidaErrores("Error sintáctico linea["+linea+"]: se esperaba un operador (*,/) cerca de \""+info+"\"");
                 break;
             case 13:
-                System.out.println("Error sintáctico linea["+linea+"]: se esperaba un operador (+,-) cerca de \""+info+"\"");
+                salidaErrores("Error sintáctico linea["+linea+"]: se esperaba un operador (+,-) cerca de \""+info+"\"");
                 break;
             case 14:
-                System.out.println("Error sintáctico linea["+linea+"]: se esperaba un \"=\" cerca de \""+info+"\"");
+                salidaErrores("Error sintáctico linea["+linea+"]: se esperaba un \"=\" cerca de \""+info+"\"");
                 break; 
             case 15:
-                System.out.println("Error sintáctico linea["+linea+"]: Falta un operando cerca de \""+info+"\"");
-                break;     
+                salidaErrores("Error sintáctico linea["+linea+"]: Falta un operando cerca de \""+info+"\"");
+                break;
+            case 16:
+                salidaErrores("Error sintáctico linea["+linea+"]: Se esperaba main cerca de \""+info+"\"");
+                break;
         }
-       System.exit(errorcode);
+       //System.exit(errorcode);
     }
 }

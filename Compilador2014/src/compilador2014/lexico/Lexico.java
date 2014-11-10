@@ -31,7 +31,7 @@ public class Lexico {
        cantTokens = 0;
        contTokens = 0;
        try{
-       archivo = new FileReader(nombreArchivo);
+            archivo = new FileReader(nombreArchivo);
        }catch(FileNotFoundException e){
            throw new RuntimeException("No se ha encontrado el archivo");
        }
