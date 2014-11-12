@@ -68,6 +68,19 @@ public class Sintactico {
      */ 
     public void iniciarAnalisis(){
         // analisis del programa 
+        Simbolo _iprintf = new Simbolo("void","iprintf","");
+        _iprintf.nuevaPropiedad("numparams","1");
+        _iprintf.paramsTypes[0] = "int";
+        analizadorSemantico.tablaDeSimbolos.nuevoSimbolo(_iprintf, GLOBAL_SCOPE);
+        Simbolo _cprintf = new Simbolo("void","cprintf","");
+        _cprintf.nuevaPropiedad("numparams","1");
+        _cprintf.paramsTypes[0] = "char";
+        analizadorSemantico.tablaDeSimbolos.nuevoSimbolo(_cprintf, GLOBAL_SCOPE);
+        Simbolo _iscanf = new Simbolo("int","iscanf","");
+        
+        analizadorSemantico.tablaDeSimbolos.nuevoSimbolo(_iscanf, GLOBAL_SCOPE);
+        Simbolo _cscanf = new Simbolo("char","cscanf","");
+        analizadorSemantico.tablaDeSimbolos.nuevoSimbolo(_cscanf, GLOBAL_SCOPE);
         program(); 
         if(!main){
             errores++;
@@ -466,15 +479,16 @@ public class Sintactico {
     private void expresion(){
         tokenActual = analizadorLexico.consumirToken();
         String tipo1 = "";
+        String id = tokenActual.obtenerLexema();
         //salidaErrores("EXPRESION: " +  tokenActual.obtenerLexema());
         if(tokenActual.obtenerToken().equals("identifier")){
-            if(analizadorSemantico.tablaDeSimbolos.existeSimbolo(tokenActual.obtenerLexema(), CURRENT_SCOPE)<0){
-                error(18,tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
-            }else{
-                tipo1 = analizadorSemantico.tablaDeSimbolos.obtenerSimbolo(tokenActual.obtenerLexema(), CURRENT_SCOPE).obtenerTipo();
-            }
             tokenActual = analizadorLexico.consumirToken();
             if(tokenActual.obtenerLexema().equals("[")){
+                if(analizadorSemantico.tablaDeSimbolos.existeSimbolo(id, CURRENT_SCOPE)<0){
+                    error(18,tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
+                }else{
+                    tipo1 = analizadorSemantico.tablaDeSimbolos.obtenerSimbolo(tokenActual.obtenerLexema(), CURRENT_SCOPE).obtenerTipo();
+                }
                 tokenActual = analizadorLexico.consumirToken();
                 simple_expresion();
                 tokenActual = analizadorLexico.consumirToken();
@@ -496,12 +510,32 @@ public class Sintactico {
                     }
                 }
             }else if(tokenActual.obtenerLexema().equals("=")){
+                if(analizadorSemantico.tablaDeSimbolos.existeSimbolo(id, CURRENT_SCOPE)<0){
+                    error(18,tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
+                }else{
+                    tipo1 = analizadorSemantico.tablaDeSimbolos.obtenerSimbolo(id, CURRENT_SCOPE).obtenerTipo();
+                }
                 tokenActual = analizadorLexico.consumirToken();
                 simple_expresion();
                 String tipo2 = analizadorSemantico.ultipoTipo;
                 if(analizadorSemantico.operar(tipo1, "=", tipo2)==null){
                       String info = "No se puede convertir el tipo "+ tipo2 +" a "+tipo1;
                         error(22, info,tokenActual.obtenerLinea());
+                }
+            }else if(tokenActual.obtenerLexema().equals("(")){
+                int cant_args = args(id);
+                if(analizadorSemantico.tablaDeSimbolos.existeSimbolo(id, GLOBAL_SCOPE)<0){
+                    error(19,id,tokenActual.obtenerLinea());
+                }else{
+                    analizadorSemantico.ultipoTipo = analizadorSemantico.tablaDeSimbolos.obtenerSimbolo(id, GLOBAL_SCOPE).obtenerTipo();
+                    int numParams = Integer.parseInt(analizadorSemantico.tablaDeSimbolos.obtenerSimbolo(id, GLOBAL_SCOPE).obtenerValor("numparams"));
+                    if(numParams!=cant_args){
+                        error(21,Integer.toString(numParams),tokenActual.obtenerLinea());
+                    }
+                    
+                }
+                if(!tokenActual.obtenerLexema().equals(")")){
+                    error(8, tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
                 }
             }else{
                 error(14, tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
@@ -619,7 +653,12 @@ public class Sintactico {
                     error(19,id,tokenActual.obtenerLinea());
                 }else{
                     analizadorSemantico.ultipoTipo = analizadorSemantico.tablaDeSimbolos.obtenerSimbolo(id, GLOBAL_SCOPE).obtenerTipo();
-                    int numParams = Integer.parseInt(analizadorSemantico.tablaDeSimbolos.obtenerSimbolo(id, GLOBAL_SCOPE).obtenerValor("numparams"));
+                    int numParams;
+                    if(analizadorSemantico.tablaDeSimbolos.obtenerSimbolo(id, GLOBAL_SCOPE).existePropiedad("numparams")){
+                        numParams= Integer.parseInt(analizadorSemantico.tablaDeSimbolos.obtenerSimbolo(id, GLOBAL_SCOPE).obtenerValor("numparams"));
+                    }else{
+                        numParams = 0;
+                    }
                     if(numParams!=cant_args){
                         error(21,Integer.toString(numParams),tokenActual.obtenerLinea());
                     }
@@ -654,7 +693,16 @@ public class Sintactico {
     private int arg_list(String funcdef){
         tokenActual = analizadorLexico.consumirToken();
         Simbolo simb = analizadorSemantico.tablaDeSimbolos.obtenerSimbolo(funcdef, GLOBAL_SCOPE);
-        int numParams = Integer.parseInt(simb.obtenerValor("numparams"));
+        int numParams;
+        if(simb!=null){
+            if(simb.existePropiedad("numparams")){
+                numParams = Integer.parseInt(simb.obtenerValor("numparams"));
+            }else{
+                numParams = 0;
+            }
+        }else{
+            numParams = 0;
+        }
         if(!tokenActual.obtenerLexema().equals(")")){
             if(tokenActual.obtenerLexema().equals(",")){
                 tokenActual = analizadorLexico.consumirToken();
