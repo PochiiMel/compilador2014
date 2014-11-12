@@ -9,6 +9,7 @@ package compilador2014.lexico;
 import java.io.*;
 import compilador2014.lexico.Automata;
 import compilador2014.lexico.Token;
+import javax.swing.JTextArea;
 /**
  *
  * @author william
@@ -20,6 +21,7 @@ public class Lexico {
    private int contadorBuffer;
    private final int maxchar = 1000;
    private Token[] tokens;
+   private JTextArea salida;
    private int cantTokens;
    private int contTokens;
    
@@ -36,6 +38,18 @@ public class Lexico {
            throw new RuntimeException("No se ha encontrado el archivo");
        }
    }
+   
+   public void establecerSalidaErrores(JTextArea output){
+        salida = output;
+    }
+    
+    public void salidaErrores(String texto){
+        if(salida==null){
+            System.out.println(texto);
+        }else{
+            salida.append(texto+"\n");
+        }
+    }
    
    private void nuevoToken(Token nt){
        tokens[cantTokens++] = nt;
@@ -93,7 +107,7 @@ public class Lexico {
            int delimitador = 0;
            int const_char = 0;
            int linea = 1;
-           Automata reconocedor = new Automata();
+           Automata reconocedor = new Automata(); reconocedor.establecerSalidaErrores(salida);
            for(int i = 0; i < caracteresLeidos; i++){
                if(const_char == 0){
                     if(nbuf[i]==' ' || nbuf[i]=='\n' || nbuf[i]=='\0' || nbuf[i]=='\r' || nbuf[i]=='\t'){
@@ -101,34 +115,34 @@ public class Lexico {
                         if(reconocedor.elementosLeidos()>0){
                             nuevoToken(reconocedor.reconocer());
                             establecerLinea(linea);
-                            reconocedor = new Automata();
+                            reconocedor = new Automata(); reconocedor.establecerSalidaErrores(salida);
                         }
                     }else if(nbuf[i]=='(' || nbuf[i]==')' || nbuf[i]=='{' || nbuf[i]=='}' || nbuf[i]=='[' || nbuf[i]==']'){
                         if(reconocedor.elementosLeidos()>0){
                             nuevoToken(reconocedor.reconocer());
                             establecerLinea(linea);
                         }
-                        reconocedor = new Automata();
+                        reconocedor = new Automata(); reconocedor.establecerSalidaErrores(salida);
                         reconocedor.agregar(nbuf[i]);
                         nuevoToken(reconocedor.reconocer());
                         establecerLinea(linea);
-                        reconocedor = new Automata();
+                        reconocedor = new Automata(); reconocedor.establecerSalidaErrores(salida);
                     }else if(nbuf[i]=='+' || nbuf[i]=='-' || nbuf[i]=='*' || nbuf[i]=='/'){
                         if(reconocedor.elementosLeidos()>0){
                             nuevoToken(reconocedor.reconocer());
                             establecerLinea(linea);
                         }
-                        reconocedor = new Automata();
+                        reconocedor = new Automata(); reconocedor.establecerSalidaErrores(salida);
                         reconocedor.agregar(nbuf[i]);
                         nuevoToken(reconocedor.reconocer());
                         establecerLinea(linea);
-                        reconocedor = new Automata();
+                        reconocedor = new Automata(); reconocedor.establecerSalidaErrores(salida);
                     }else if(nbuf[i]=='=' || nbuf[i]=='>' || nbuf[i]=='<'){
                         if(reconocedor.elementosLeidos()>0){
                             nuevoToken(reconocedor.reconocer());
                             establecerLinea(linea);
                         }
-                        reconocedor = new Automata();
+                        reconocedor = new Automata(); reconocedor.establecerSalidaErrores(salida);
                         reconocedor.agregar(nbuf[i]);
                         if( ((i+1)<caracteresLeidos) && (nbuf[i+1]=='=') ){
                             reconocedor.agregar(nbuf[i+1]);
@@ -136,23 +150,23 @@ public class Lexico {
                         }
                         nuevoToken(reconocedor.reconocer());
                         establecerLinea(linea);
-                        reconocedor = new Automata();
+                        reconocedor = new Automata(); reconocedor.establecerSalidaErrores(salida);
                     }else if(nbuf[i]==','){
                         if(reconocedor.elementosLeidos()>0){
                             nuevoToken(reconocedor.reconocer());
                             establecerLinea(linea);
                         }
-                        reconocedor = new Automata();
+                        reconocedor = new Automata(); reconocedor.establecerSalidaErrores(salida);
                         reconocedor.agregar(nbuf[i]);
                         nuevoToken(reconocedor.reconocer());
                         establecerLinea(linea);
-                        reconocedor = new Automata();
+                        reconocedor = new Automata(); reconocedor.establecerSalidaErrores(salida);
                     }else if(nbuf[i]=='!'){
                         if(reconocedor.elementosLeidos()>0){
                             nuevoToken(reconocedor.reconocer());
                             establecerLinea(linea);
                         }
-                        reconocedor = new Automata();
+                        reconocedor = new Automata(); reconocedor.establecerSalidaErrores(salida);
                         reconocedor.agregar(nbuf[i]);
                         if( ((i+1)<caracteresLeidos) && (nbuf[i+1]=='=') ){
                             reconocedor.agregar(nbuf[i+1]);
@@ -160,17 +174,17 @@ public class Lexico {
                         }
                         nuevoToken(reconocedor.reconocer());
                         establecerLinea(linea);
-                        reconocedor = new Automata();
+                        reconocedor = new Automata(); reconocedor.establecerSalidaErrores(salida);
                     }else if(nbuf[i]==';'){
                         if(reconocedor.elementosLeidos()>0){
                             nuevoToken(reconocedor.reconocer());
                             establecerLinea(linea);
                         }
-                        reconocedor = new Automata();
+                        reconocedor = new Automata(); reconocedor.establecerSalidaErrores(salida);
                         reconocedor.agregar(nbuf[i]);
                         nuevoToken(reconocedor.reconocer());
                         establecerLinea(linea);
-                        reconocedor = new Automata();
+                        reconocedor = new Automata(); reconocedor.establecerSalidaErrores(salida);
                     }else if((nbuf[i]=='"')){
                         const_char = 1;
                         if(reconocedor.elementosLeidos()>0){
@@ -178,7 +192,7 @@ public class Lexico {
                             establecerLinea(linea);
                         }
                         
-                        reconocedor = new Automata();
+                        reconocedor = new Automata(); reconocedor.establecerSalidaErrores(salida);
                         reconocedor.agregar(nbuf[i]);
                     }                
                     else{ 
@@ -192,7 +206,7 @@ public class Lexico {
                                 reconocedor.agregar(nbuf[i]);
                                 nuevoToken(reconocedor.reconocer());
                                 establecerLinea(linea);
-                                reconocedor = new Automata();
+                                reconocedor = new Automata(); reconocedor.establecerSalidaErrores(salida);
                             }
                         }
                     }else{

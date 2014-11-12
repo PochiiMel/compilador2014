@@ -7,6 +7,7 @@
 package compilador2014.lexico;
 
 import compilador2014.lexico.Token;
+import javax.swing.JTextArea;
 
 /**
  *
@@ -16,10 +17,24 @@ public class Automata {
     private int cantChars;
     private final int tamBuffer = 1000;
     private char[] buffer;
+    private JTextArea salida;
     
     public Automata(){
         cantChars = 0;
         buffer = new char[tamBuffer];
+        salida = null;
+    }
+    
+    public void establecerSalidaErrores(JTextArea output){
+        salida = output;
+    }
+    
+    public void salidaErrores(String texto){
+        if(salida==null){
+            System.out.println(texto);
+        }else{
+            salida.append(texto+"\n");
+        }
     }
     
     public void agregar(char elemento){
@@ -95,30 +110,20 @@ public class Automata {
         int estado = 0;
         for(int i = 0; i < cantChars; i++){
             switch(buffer[i]){
-                case '"':
+                case '\'':
                     if(estado==0) {estado = 1;}
-                    else if(estado==1) {estado = 2;}
-                    else if(estado==2) {estado = 4;}
-                    else if(estado==3) {estado = 1;}
-                    else if(estado==4) {estado = 4;}
-                    break;
-                case '\\':
-                    if(estado==0) {estado = 4;}
-                    else if(estado==1) {estado = 3;}
-                    else if(estado==2) {estado = 4;}
-                    else if(estado==3) {estado = 1;}
-                    else if(estado==4) {estado = 4;}
+                    else if(estado==3) {estado = 2;}
+                    else if(estado==1) {estado = 5;}
                     break;
                 default:
-                    if(estado==0) {estado = 4;}
-                    else if(estado==1) {estado = 1;}
-                    else if(estado==2) {estado = 4;}
-                    else if(estado==3) {estado = 1;}
-                    else if(estado==4) {estado = 4;}
+                    if(estado==1) {estado = 3;}
+                    else if(estado==3) {estado = 4;}
                     break;
             }
         }
         
+        if(estado==4) salidaErrores("[Advertencia]: Variable demasiado larga para su tipo. Su contenido sera truncado");
+        if(estado==5) salidaErrores("[Advertencia]: Constante de caracter vacia");
         if(estado==2) return true;
         return false;
     }

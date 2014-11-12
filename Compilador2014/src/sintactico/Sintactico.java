@@ -46,11 +46,12 @@ public class Sintactico {
     
     public void establecerSalidaErrores(JTextArea output){
         salida = output;
+        analizadorLexico.establecerSalidaErrores(output);
     }
     
     public void salidaErrores(String texto){
         if(salida==null){
-            salidaErrores(texto);
+            System.out.println(texto);
         }else{
             salida.append(texto+"\n");
         }
@@ -464,10 +465,13 @@ public class Sintactico {
     
     private void expresion(){
         tokenActual = analizadorLexico.consumirToken();
+        String tipo1 = "";
         //salidaErrores("EXPRESION: " +  tokenActual.obtenerLexema());
         if(tokenActual.obtenerToken().equals("identifier")){
             if(analizadorSemantico.tablaDeSimbolos.existeSimbolo(tokenActual.obtenerLexema(), CURRENT_SCOPE)<0){
                 error(18,tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
+            }else{
+                tipo1 = analizadorSemantico.tablaDeSimbolos.obtenerSimbolo(tokenActual.obtenerLexema(), CURRENT_SCOPE).obtenerTipo();
             }
             tokenActual = analizadorLexico.consumirToken();
             if(tokenActual.obtenerLexema().equals("[")){
@@ -481,6 +485,12 @@ public class Sintactico {
                     if(tokenActual.obtenerLexema().equals("=")){
                         tokenActual = analizadorLexico.consumirToken();
                         simple_expresion();
+                        String tipo2 = analizadorSemantico.ultipoTipo;
+                        if(analizadorSemantico.operar(tipo1, "=", tipo2)==null){
+                            String info = "No se puede convertir el tipo "+ tipo2 +" a "+tipo1;
+                            error(22, info,tokenActual.obtenerLinea());
+                        }
+                        
                     }else{
                         error(14, tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
                     }
@@ -488,6 +498,11 @@ public class Sintactico {
             }else if(tokenActual.obtenerLexema().equals("=")){
                 tokenActual = analizadorLexico.consumirToken();
                 simple_expresion();
+                String tipo2 = analizadorSemantico.ultipoTipo;
+                if(analizadorSemantico.operar(tipo1, "=", tipo2)==null){
+                      String info = "No se puede convertir el tipo "+ tipo2 +" a "+tipo1;
+                        error(22, info,tokenActual.obtenerLinea());
+                }
             }else{
                 error(14, tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
             }
@@ -525,9 +540,16 @@ public class Sintactico {
              analizadorLexico.retroceso();
              tokenActual = analizadorLexico.consumirToken();
              term();
+             String tipo1 = analizadorSemantico.ultipoTipo;
              tokenActual = analizadorLexico.consumirToken();
+             String operador = tokenActual.obtenerLexema();
              tokenActual = analizadorLexico.consumirToken();
              aditive_expresion();
+             String tipo2 = analizadorSemantico.ultipoTipo;
+             if(analizadorSemantico.operar(tipo1, operador, tipo2)==null){
+                 String info = "No se puede convertir el tipo "+ tipo2 +" a "+tipo1;
+                 error(22, info,tokenActual.obtenerLinea());
+             }
          }else{
              analizadorLexico.retroceso();
              analizadorLexico.retroceso();
@@ -545,9 +567,16 @@ public class Sintactico {
              analizadorLexico.retroceso();
              tokenActual = analizadorLexico.consumirToken();
              factor();
+             String tipo1 = analizadorSemantico.ultipoTipo;
              tokenActual = analizadorLexico.consumirToken();
+             String operador = tokenActual.obtenerLexema();
              tokenActual = analizadorLexico.consumirToken();
              term();
+             String tipo2 = analizadorSemantico.ultipoTipo;
+             if(analizadorSemantico.operar(tipo1, operador, tipo2)==null){
+                 String info = "No se puede convertir el tipo "+ tipo2 +" a "+tipo1;
+                 error(22, info,tokenActual.obtenerLinea());
+             }
          }else{
              analizadorLexico.retroceso();
              analizadorLexico.retroceso();
@@ -575,6 +604,8 @@ public class Sintactico {
             if(tokenActual.obtenerLexema().equals("[")){
                 if(analizadorSemantico.tablaDeSimbolos.existeSimbolo(id, CURRENT_SCOPE)<0){
                     error(18,id,tokenActual.obtenerLinea());
+                }else{
+                    analizadorSemantico.ultipoTipo = analizadorSemantico.tablaDeSimbolos.obtenerSimbolo(id, CURRENT_SCOPE).obtenerTipo();
                 }
                 tokenActual = analizadorLexico.consumirToken();
                 simple_expresion();
@@ -583,10 +614,11 @@ public class Sintactico {
                     error(7, tokenActual.obtenerLexema(),tokenActual.obtenerLinea());
                 }
             }else if(tokenActual.obtenerLexema().equals("(")){
-                int cant_args = args();
+                int cant_args = args(id);
                 if(analizadorSemantico.tablaDeSimbolos.existeSimbolo(id, GLOBAL_SCOPE)<0){
                     error(19,id,tokenActual.obtenerLinea());
                 }else{
+                    analizadorSemantico.ultipoTipo = analizadorSemantico.tablaDeSimbolos.obtenerSimbolo(id, GLOBAL_SCOPE).obtenerTipo();
                     int numParams = Integer.parseInt(analizadorSemantico.tablaDeSimbolos.obtenerSimbolo(id, GLOBAL_SCOPE).obtenerValor("numparams"));
                     if(numParams!=cant_args){
                         error(21,Integer.toString(numParams),tokenActual.obtenerLinea());
@@ -599,11 +631,15 @@ public class Sintactico {
             }else{
                 if(analizadorSemantico.tablaDeSimbolos.existeSimbolo(id, CURRENT_SCOPE)<0){
                     error(18,id,tokenActual.obtenerLinea());
+                }else{
+                    analizadorSemantico.ultipoTipo = analizadorSemantico.tablaDeSimbolos.obtenerSimbolo(id, CURRENT_SCOPE).obtenerTipo();
                 }
                 analizadorLexico.retroceso();
             } 
         }else if(tokenActual.obtenerToken().equals("constant")){
-            // pasa
+            analizadorSemantico.ultipoTipo = "int";
+        }else if(tokenActual.obtenerToken().equals("constant-char")){
+            analizadorSemantico.ultipoTipo = "char";
         }else if(tokenActual.obtenerLexema().equals(")")){
             
         }else{
@@ -611,22 +647,43 @@ public class Sintactico {
         }
     }
     
-    private int args(){
-        return arg_list();
+    private int args(String funcdef){
+        return arg_list(funcdef);
     }
     
-    private int arg_list(){
+    private int arg_list(String funcdef){
         tokenActual = analizadorLexico.consumirToken();
+        Simbolo simb = analizadorSemantico.tablaDeSimbolos.obtenerSimbolo(funcdef, GLOBAL_SCOPE);
+        int numParams = Integer.parseInt(simb.obtenerValor("numparams"));
         if(!tokenActual.obtenerLexema().equals(")")){
             if(tokenActual.obtenerLexema().equals(",")){
                 tokenActual = analizadorLexico.consumirToken();
                 simple_expresion();
-                return 1 + arg_list();
+                String tipo = analizadorSemantico.ultipoTipo;
+                int count = 1 + arg_list(funcdef); 
+                if((count-1) < (numParams)){
+                    if(!simb.paramsTypes[(numParams - count)].equals(tipo)){
+                        String info = "Parametro "+ (numParams - count + 1) +" se esperaba de tipo "+simb.paramsTypes[count-1];
+                        error(23, info,tokenActual.obtenerLinea());
+                    }
+                    //System.out.println(count);
+                }
+                return count;
             }else{
                 analizadorLexico.retroceso();
                 tokenActual = analizadorLexico.consumirToken();
                 simple_expresion();
-                return 1 + arg_list();
+                String tipo = analizadorSemantico.ultipoTipo;
+                int count = 1 + arg_list(funcdef);
+                if((count-1)<numParams){
+                    if(!simb.paramsTypes[(numParams - count)].equals(tipo)){
+                        String info = "Parametro "+ (numParams - count + 1) +" se esperaba de tipo "+simb.paramsTypes[count-1];
+                        error(23, info,tokenActual.obtenerLinea());
+                    }
+                    //System.out.println(count);
+                }
+                //System.out.println(count);
+                return count;
             }
         }
         
@@ -657,8 +714,12 @@ public class Sintactico {
         if((simb = analizadorSemantico.tablaDeSimbolos.obtenerSimbolo(funcdef, 0))!= null){
             if(!simb.existePropiedad("numparams")){
                 simb.nuevaPropiedad("numparams", "1");
+                simb.paramsTypes[0] = dataSimb[0];
+                //System.out.println("Parametro[0]="+dataSimb[0]);
             }else{
                 int numparams = Integer.parseInt(simb.obtenerValor("numparams"));
+                simb.paramsTypes[numparams] = dataSimb[0];
+                //System.out.println("Parametro["+numparams+"]="+dataSimb[0]);
                 numparams++;
                 simb.nuevaPropiedad("numparams", Integer.toString(numparams));
             }
@@ -778,7 +839,13 @@ public class Sintactico {
                 break; 
             case 21:
                 salidaErrores("Error semántico linea["+linea+"]: La funcion esperaba recibir \""+info+"\" parametros");
-                break;     
+                break;
+            case 22:
+                salidaErrores("Error semántico linea["+linea+"]: Tipos incompatibles, \""+info+"\"");
+                break;
+            case 23:
+                salidaErrores("Error semántico linea["+linea+"]: Tipos incompatibles, \""+info+"\"");
+                break;      
         }
        //System.exit(errorcode);
     }

@@ -15,12 +15,14 @@ public class Simbolo {
     private String valor;
     private String id;
     private Hashtable<String,String> extra;
+    public String[] paramsTypes;
     
     public Simbolo(String t, String i, String v){
         tipo = t;
         id = i;
         valor = v;
         extra = new Hashtable<String,String>();
+        paramsTypes = new String[25];
     }
     
     public String obtenerTipo(){
