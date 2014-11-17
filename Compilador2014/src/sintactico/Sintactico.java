@@ -10,8 +10,10 @@ import compilador2014.lexico.Lexico;
 import compilador2014.lexico.Token;
 import javax.swing.JTextArea;
 import java.util.*;
+import java.io.*;
 import semantico.Semantico;
 import semantico.Simbolo;
+import asm.Interprete;
 /**
  *
  * @author william
@@ -19,8 +21,10 @@ import semantico.Simbolo;
 public class Sintactico {
     private Lexico analizadorLexico;
     private Semantico analizadorSemantico;
+    private Interprete interpreteEnsamblador;
     private Token tokenActual;
     private String nombreArchivo;
+    private FileWriter asm;
     private JTextArea salida;
     private boolean main;
     int errores;
@@ -29,8 +33,12 @@ public class Sintactico {
     int COUNTER_SCOPE;
     String[] dataSimb;
     boolean simbPrep;
+    private String sa_asm;
+    private String salida_asm;
+    private String buffer_declaracion;
+    private String buffer_programa;
     
-    public Sintactico(String nmbArchivo){
+    public Sintactico(String nmbArchivo, String t){
         nombreArchivo = nmbArchivo;
         analizadorLexico = new Lexico(nmbArchivo);
         analizadorLexico.generarTokens();
@@ -42,10 +50,20 @@ public class Sintactico {
         COUNTER_SCOPE = 0;
         dataSimb = new String[3];
         simbPrep = false;
+        sa_asm = t;
+        buffer_declaracion = "";
+        buffer_programa    = ".code\n";
+        salida_asm = sa_asm.split("\\.")[0] + ".asm";
+        try{
+            asm = new FileWriter(salida_asm);
+       }catch(IOException e){
+           throw new RuntimeException("No se puede crear el archivo");
+       }
     }
     
     public void establecerSalidaErrores(JTextArea output){
         salida = output;
+        interpreteEnsamblador = new Interprete(salida_asm, output);
         analizadorLexico.establecerSalidaErrores(output);
     }
     
@@ -88,10 +106,110 @@ public class Sintactico {
         }
         salidaErrores("**** FIN DE COMPILACION Errores("+errores+")****");
         if(errores==0){
+            escribir_asm(buffer_declaracion);
+            escribir_asm(buffer_programa);
             salidaErrores("Compilacion exitosa!!!");
         }else{
             salidaErrores("Se encontraron algunos errores!!!");
         }
+        try{
+            asm.close();
+            salidaErrores("Corriendo...");
+            interpreteEnsamblador.ejecutar();
+            salidaErrores("Programa terminado con exito...");
+        }catch(IOException e){
+            throw new RuntimeException("No se puede cerrar el archivo");
+        }
+    }
+    
+    /**
+     * Directivas de ensamblador, traducion asm
+     * 
+     */
+    public void ASM_DECLARACION(String varName){
+        // todas son inicializadas en vacio
+        buffer_declaracion += varName+ " " + "db 0h\n";
+    }
+    
+    public void ASM_MOV_AX(String valor){
+        buffer_programa += "MOV ax,"+valor+"\n";
+    }
+    
+    public void ASM_MOV_CX(String valor){
+        buffer_programa += "MOV cx,"+valor+"\n";
+    }
+    
+    public void ASM_MOV_BX(String valor){
+        buffer_programa += "MOV bx,"+valor+"\n";
+    }
+    
+    public void ASM_ASIGNACION_CONSTANTE(String varName, String valor){
+        buffer_programa += "MOV ax,"+valor+"\n";
+        buffer_programa += "MOV "+varName+",ax\n";
+    }
+    
+    public void ASM_ASIGNACION_VARIABLE(String varName){
+        buffer_programa += "MOV "+varName+",ax\n";
+    }
+    
+    public void ASM_SUMAR(String a, String b){
+	buffer_programa += "MOV ax,"+a+"\n";
+	buffer_programa += "ADD ax,"+b+"\n";
+    }
+    
+    public void ASM_SUMAR_ACUM(String b){
+	//buffer_programa += "MOV ax, "+a+" \t\t;copiando el valor de a en ax\n";
+	buffer_programa += "ADD ax,"+b+"\n";
+    }
+    
+    public void ASM_RESTAR(String a, String b){
+	buffer_programa += "MOV ax,"+a+"\n";
+	buffer_programa += "SUB ax,"+b+"\n";
+    }
+    
+    public void ASM_RESTAR_ACUM(String b){
+	//buffer_programa += "MOV ax, "+a+" \t\t;copiando el valor de a en ax\n";
+	buffer_programa += "SUB ax,"+b+"\n";
+    }
+    
+    public void ASM_MULTIPLICAR(String a, String b){
+	buffer_programa += "MOV ax,"+a+"\n";
+	buffer_programa += "MOV bx,"+b+"\n";
+	buffer_programa += "MUL bx\n";
+        //buffer_programa += "MOV ax, bx    \t\t;dejamos el resultado en acumulador ax\n";
+    }
+    
+    public void ASM_MULTIPLICAR_ACUM(String b){
+	//buffer_programa += "MOV ax, "+a+" \t\t;copiando el valor de a en ax\n";
+	buffer_programa += "MOV bx,"+b+"\n";
+	buffer_programa += "MUL bx\n";
+        //buffer_programa += "MOV ax, bx    \t\t;dejamos el resultado en acumulador ax\n";
+    }
+    
+    public void ASM_DIVIDIR(String a, String b){
+	buffer_programa += "MOV ax,"+a+"\n";
+	buffer_programa += "MOV bx,"+b+"\n";
+	buffer_programa += "DIV bx\n";
+        //buffer_programa += "MOV ax, bx    \t\t;dejamos el resultado en acumulador ax\n";
+    }
+    
+    public void ASM_DIVIDIR_ACUM(String b){
+	//buffer_programa += "MOV ax, "+a+" \t\t;copiando el valor de a en ax\n";
+	buffer_programa += "MOV bx,"+b+"\n";
+	buffer_programa += "DIV bx\n";
+       // buffer_programa += "MOV ax, bx    \t\t;dejamos el resultado en acumulador ax\n";
+    }
+    
+    public void ASM_IMPRIMIR_AX(){
+        buffer_programa += "MOV ah,ax\n";
+    }
+    
+    public void ASM_NEG_AX(){
+        buffer_programa += "NEG ax\n";
+    }
+    
+    public void ASM_NEG_BX(){
+        buffer_programa += "NEG bx\n";
     }
     
     /**
@@ -111,12 +229,23 @@ public class Sintactico {
         int segundo = fecha.get(Calendar.SECOND);
         salidaErrores("DATE: "+ dia + "/" + (mes+1) + "/" + año+" "+hora+":"+minuto+":"+segundo);
         salidaErrores("**** INICIO DE COMPILACION ****");
+        escribir_asm(".model small \n" +
+                     ".stack \n" +
+                     ".data \n");
         tokenActual = analizadorLexico.consumirToken();
         if(tokenActual!=null){
             if(tokenActual.obtenerLexema().equals("void") || tokenActual.obtenerLexema().equals("int") || tokenActual.obtenerLexema().equals("char")){
                 analizadorLexico.retroceso();
                 declaration_list();
             }
+        }
+    }
+    
+    public void escribir_asm(String con){
+        try{
+            asm.write(con);
+        }catch(IOException e){
+            
         }
     }
     
@@ -219,6 +348,7 @@ public class Sintactico {
                 case ";":                                       // si el siguiente token es un punto y coma se llega al fin de la declaracion, retrocedemos un token para volver a comprobar si existen mas declaraciones
                     dataSimb[2] = "";
                     if(analizadorSemantico.tablaDeSimbolos.existeSimbolo(dataSimb[1], CURRENT_SCOPE)<0){
+                        ASM_DECLARACION(dataSimb[1]+"_"+Integer.toString(CURRENT_SCOPE));
                         Simbolo nuevaVariable = new Simbolo(dataSimb[0], dataSimb[1], dataSimb[0]);
                         analizadorSemantico.tablaDeSimbolos.nuevoSimbolo(nuevaVariable, CURRENT_SCOPE);
                     }else{
@@ -345,6 +475,7 @@ public class Sintactico {
         if(tokenActual.obtenerLexema().equals(";")){
             dataSimb[2] = "";
             if(analizadorSemantico.tablaDeSimbolos.existeSimbolo(dataSimb[1], CURRENT_SCOPE)<0){
+                ASM_DECLARACION(dataSimb[1]+"_"+Integer.toString(CURRENT_SCOPE));
                 Simbolo nuevaVariable = new Simbolo(dataSimb[0], dataSimb[1], dataSimb[0]);
                 analizadorSemantico.tablaDeSimbolos.nuevoSimbolo(nuevaVariable, CURRENT_SCOPE);
             }else{
@@ -517,6 +648,7 @@ public class Sintactico {
                 }
                 tokenActual = analizadorLexico.consumirToken();
                 simple_expresion();
+                ASM_ASIGNACION_VARIABLE(id+"_"+Integer.toString(CURRENT_SCOPE));
                 String tipo2 = analizadorSemantico.ultipoTipo;
                 if(analizadorSemantico.operar(tipo1, "=", tipo2)==null){
                       String info = "No se puede convertir el tipo "+ tipo2 +" a "+tipo1;
@@ -527,6 +659,9 @@ public class Sintactico {
                 if(analizadorSemantico.tablaDeSimbolos.existeSimbolo(id, GLOBAL_SCOPE)<0){
                     error(19,id,tokenActual.obtenerLinea());
                 }else{
+                    if(id.equals("iprintf")||id.equals("cprintf")){
+                        ASM_IMPRIMIR_AX();
+                    }
                     analizadorSemantico.ultipoTipo = analizadorSemantico.tablaDeSimbolos.obtenerSimbolo(id, GLOBAL_SCOPE).obtenerTipo();
                     int numParams = Integer.parseInt(analizadorSemantico.tablaDeSimbolos.obtenerSimbolo(id, GLOBAL_SCOPE).obtenerValor("numparams"));
                     if(numParams!=cant_args){
@@ -577,8 +712,14 @@ public class Sintactico {
              String tipo1 = analizadorSemantico.ultipoTipo;
              tokenActual = analizadorLexico.consumirToken();
              String operador = tokenActual.obtenerLexema();
+             ASM_MOV_BX("ax");
              tokenActual = analizadorLexico.consumirToken();
              aditive_expresion();
+             if(operador.equals("+"))
+                 ASM_SUMAR_ACUM("bx");
+             if(operador.equals("-")){
+                 ASM_RESTAR_ACUM("bx");
+             }
              String tipo2 = analizadorSemantico.ultipoTipo;
              if(analizadorSemantico.operar(tipo1, operador, tipo2)==null){
                  String info = "No se puede convertir el tipo "+ tipo2 +" a "+tipo1;
@@ -604,8 +745,13 @@ public class Sintactico {
              String tipo1 = analizadorSemantico.ultipoTipo;
              tokenActual = analizadorLexico.consumirToken();
              String operador = tokenActual.obtenerLexema();
+             ASM_MOV_BX("ax");
              tokenActual = analizadorLexico.consumirToken();
              term();
+             if(operador.equals("*"))
+                 ASM_MULTIPLICAR_ACUM("bx");
+             if(operador.equals("/"))
+                 ASM_DIVIDIR_ACUM("bx");
              String tipo2 = analizadorSemantico.ultipoTipo;
              if(analizadorSemantico.operar(tipo1, operador, tipo2)==null){
                  String info = "No se puede convertir el tipo "+ tipo2 +" a "+tipo1;
@@ -671,13 +817,16 @@ public class Sintactico {
                 if(analizadorSemantico.tablaDeSimbolos.existeSimbolo(id, CURRENT_SCOPE)<0){
                     error(18,id,tokenActual.obtenerLinea());
                 }else{
+                    ASM_MOV_AX(id+"_"+Integer.toString(CURRENT_SCOPE));
                     analizadorSemantico.ultipoTipo = analizadorSemantico.tablaDeSimbolos.obtenerSimbolo(id, CURRENT_SCOPE).obtenerTipo();
                 }
                 analizadorLexico.retroceso();
             } 
         }else if(tokenActual.obtenerToken().equals("constant")){
             analizadorSemantico.ultipoTipo = "int";
+            ASM_MOV_AX(tokenActual.obtenerLexema());
         }else if(tokenActual.obtenerToken().equals("constant-char")){
+            ASM_MOV_AX(tokenActual.obtenerLexema().replace("'",""));
             analizadorSemantico.ultipoTipo = "char";
         }else if(tokenActual.obtenerLexema().equals(")")){
             

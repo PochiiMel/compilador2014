@@ -236,7 +236,7 @@ public class Editor extends javax.swing.JFrame {
             JOptionPane.showMessageDialog(rootPane,"Primero debe guardar el archivo");
         }else{
             // Inicia el proceso de compilacion
-            Sintactico analizadorSintactico = new Sintactico(nombreArchivo);
+            Sintactico analizadorSintactico = new Sintactico(nombreArchivo,titulo);
             analizadorSintactico.establecerSalidaErrores(jTextArea2);
             analizadorSintactico.limipiarSalidaErrores();
             analizadorSintactico.iniciarAnalisis();
